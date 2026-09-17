@@ -1,0 +1,7 @@
+{
+  "name": "bottlenet-admin",
+  "private": true,
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

@@ -1,0 +1,8 @@
+body,button,input,select,h1,h2,h3,.brand,.timer,.metric-value {
+  font-family: Arial, Helvetica, sans-serif;
+}
+.brand-mark img { display: block; width: 29px; height: 29px; }
+.impact-icon svg { width: 28px; height: 28px; }
+.wifi-symbol svg { width: 20px; height: 20px; }
+.login-icon svg { width: 26px; height: 26px; }
+.nav-item svg { width: 18px; height: 18px; }

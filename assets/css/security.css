@@ -1,0 +1,160 @@
+/* Security and alarm views. Mock data only: no real sensor feed. */
+.alarm-banner{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:20px;
+  padding:16px 18px;
+  border-radius:16px;
+  overflow:hidden;
+  color:#fdf1ef;
+  background:linear-gradient(120deg,#2a1512 0%,#4a1f1a 55%,#5d2420 100%);
+  box-shadow:0 14px 30px rgba(74,31,26,.28)
+}
+.alarm-banner[hidden]{
+  display:none!important
+}
+.alarm-banner[data-level="warning"]{
+  background:linear-gradient(120deg,#2a1f10 0%,#4d3714 55%,#63481a 100%);
+  box-shadow:0 14px 30px rgba(77,55,20,.28)
+}
+.alarm-siren{
+  position:relative;
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:42px;
+  flex:none;
+  border-radius:50%;
+  background:rgba(255,107,90,.16);
+  color:#ff8a76
+}
+.alarm-banner[data-level="warning"] .alarm-siren{
+  background:rgba(242,181,60,.16);
+  color:#f6c76a
+}
+.alarm-siren svg{
+  width:21px;
+  height:21px
+}
+/* A single expanding ring reads as "live" without drawing the eye away. */
+.alarm-siren::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  border:1px solid currentColor;
+  animation:alarm-ring 2.2s ease-out infinite
+}
+@keyframes alarm-ring{
+  0%{transform:scale(1);opacity:.55}
+  70%{transform:scale(1.45);opacity:0}
+  100%{transform:scale(1.45);opacity:0}
+}
+.alarm-copy{
+  min-width:0;
+  flex:1
+}
+.alarm-headline{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex-wrap:wrap
+}
+.alarm-headline strong{
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:.1px
+}
+.alarm-chip{
+  padding:3px 9px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.8px;
+  background:#ff6b5a;
+  color:#2a1512
+}
+.alarm-banner[data-level="warning"] .alarm-chip{
+  background:#f2b53c
+}
+.alarm-meta{
+  margin:4px 0 0;
+  font-size:13px;
+  line-height:1.45;
+  color:rgba(253,241,239,.72)
+}
+.alarm-cta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:none
+}
+.alarm-cta button{
+  padding:10px 16px;
+  border:0;
+  border-radius:999px;
+  background:#fdf1ef;
+  color:#4a1f1a;
+  font-size:13px;
+  font-weight:700
+}
+.alarm-cta button:hover{
+  background:#fff
+}
+.alarm-cta button.ghost{
+  background:transparent;
+  border:1px solid rgba(253,241,239,.35);
+  color:rgba(253,241,239,.9)
+}
+.alarm-cta button.ghost:hover{
+  background:rgba(253,241,239,.12)
+}
+@media (max-width:760px){
+  .alarm-banner{
+    flex-wrap:wrap
+  }
+  .alarm-cta{
+    width:100%
+  }
+  .alarm-cta button{
+    flex:1
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  .alarm-siren::after{animation:none;opacity:.4}
+}
+.nav-item .nav-count{
+  margin-left:auto;
+  min-width:20px;
+  padding:1px 6px;
+  border-radius:999px;
+  background:#c0544b;
+  color:#fff;
+  font-size:11px;
+  font-weight:700;
+  text-align:center
+}
+
+/* Export records: the one affirmative action in the header. */
+.export-button{
+  border-radius:999px;
+  padding:11px 20px;
+  font-weight:700;
+  background:var(--green);
+  color:#fff;
+  box-shadow:0 6px 14px rgba(20,118,83,.22)
+}
+.export-button:hover{
+  background:#105f43;
+  box-shadow:0 8px 18px rgba(20,118,83,.3)
+}
+.export-button:active{
+  transform:translateY(1px);
+  box-shadow:0 4px 10px rgba(20,118,83,.24)
+}
+.export-button svg{
+  width:17px;
+  height:17px
+}

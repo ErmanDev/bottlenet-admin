@@ -1,0 +1,19 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/ingest",
+      "destination": "/api/status"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
+}
