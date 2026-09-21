@@ -1,18 +1,27 @@
-# BottleNet Admin (live ESP8266)
+# BottleNet Admin
 
-Admin UI on Vercel. Status comes from ESP8266 **ingest** (not SoftAP mock).
+Live station admin for BottleNet (ESP8266 ingest → Vercel → Neon Postgres).
 
-## How live data works
-1. SoftAP portal stays on the ESP for people depositing bottles.
-2. ESP8266 also joins your shop/home Wi‑Fi (STA) so it can reach the internet.
-3. Every few seconds the ESP POSTs `/api/status` JSON to `/api/ingest`.
-4. This admin page polls `/api/status` (same Vercel site).
+**Production:** https://bottlenet-admin.vercel.app/
 
-SoftAP alone cannot feed Vercel (no internet path from 192.168.4.1 to the cloud).
+## What’s included
 
-## Demo PIN
-1234
+- Admin UI (PIN `1234`) — no mock/demo station data
+- `/api/status` (GET) and `/api/ingest` (POST) for ESP8266 status
+- Neon Postgres via `DATABASE_URL` (set on Vercel; not committed)
+- Client polls `/api/status` every ~2s; shows **Waiting** until the board posts
 
-## Ingest key
-Header `X-BottleNet-Key: bottlenet-dev-key`
-(or set `BOTTLENET_INGEST_KEY` in Vercel env)
+## Local / deploy notes
+
+```bash
+npm install
+# Set DATABASE_URL to your Neon pooler connection string
+vercel --prod
+```
+
+ESP8266 firmware posts JSON to `/api/ingest` with header `X-BottleNet-Key` (default `bottlenet-dev-key`).
+
+## Related
+
+- SoftAP kiosk UI lives on the ESP8266 (`PlasticBottle_WiFi` → http://192.168.4.1/)
+- UI assets also exist in `ErmanDev/bottlenet-ui`
