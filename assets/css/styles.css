@@ -528,7 +528,7 @@ h3 {
   min-width: 0;
   width: calc(100% - 230px);
   display: flex;
-  flex-direction: colu;
+  flex-direction: column;
 }
 .admin-header {
   height: 78px;
