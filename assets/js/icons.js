@@ -1,15 +1,5 @@
 /* Use the same icon vocabulary across both entry points. */
 (() => {
-    const logoUrl = new URL('../images/bottlenet-mark.svg', document.currentScript.src).href;
-    document.querySelectorAll('.brand-mark').forEach(el => {
-        const logo = document.createElement('img');
-        logo.src = logoUrl;
-        logo.alt = '';
-        logo.width = 29;
-        logo.height = 29;
-        el.replaceChildren(logo);
-        el.setAttribute('aria-hidden', 'true');
-    });
     const apply = () => {
         if (!window.lucide)
             return;

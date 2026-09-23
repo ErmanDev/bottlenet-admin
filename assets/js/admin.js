@@ -34,10 +34,31 @@
         inputs.forEach(i => i.value = '');
         inputs[0].focus();
     } };
-    $('sign-out').onclick = () => { unlocked = false; try {
+    function signOut() { unlocked = false; try {
         sessionStorage.removeItem('bottlenet-admin');
     }
-    catch { } inputs.forEach(i => i.value = ''); location.href = '../index.html'; };
+    catch { } inputs.forEach(i => i.value = ''); show(); }
+    $('sign-out').onclick = signOut;
+    const themeToggle = $('theme-toggle');
+    if (themeToggle) {
+        const applyThemeIcon = () => {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            themeToggle.setAttribute('aria-pressed', String(dark));
+            themeToggle.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+            themeToggle.setAttribute('aria-label', themeToggle.title);
+            themeToggle.innerHTML = `<i data-lucide="${dark ? 'sun' : 'moon'}"></i>`;
+            if (window.lucide) window.lucide.createIcons();
+        };
+        applyThemeIcon();
+        window.addEventListener('icons-ready', applyThemeIcon);
+        themeToggle.onclick = () => {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (dark) document.documentElement.removeAttribute('data-theme');
+            else document.documentElement.setAttribute('data-theme', 'dark');
+            try { localStorage.setItem('bottlenet-theme', dark ? 'light' : 'dark'); } catch { }
+            applyThemeIcon();
+        };
+    }
     const descriptions = { overview: ['Station overview', 'A live look at your station and its impact.'], transactions: ['Transactions', 'Every bottle and every connection, accounted for.'], sessions: ['Active sessions', 'Manage the connections your station makes possible.'], machine: ['Machine status', 'Station health, collection capacity, and maintenance.'], security: ['Security and alarms', 'Bin tampering, unauthorised access, and alarm history.'], settings: ['Station settings', 'Manage bottle acceptance and connection rewards.'] };
     const badge = (text, color = 'green') => `<span class="badge ${color}">${text}</span>`;
     const alarmTypes = { bin_opened: ['Collection bin opened', 'Lid switch triggered outside a scheduled collection.'], bottle_removed: ['Bottles removed from bin', 'Bin weight dropped without a collection being recorded.'], tamper: ['Tamper detected', 'Enclosure movement or shock sensed by the tamper sensor.'], door_open: ['Service door left open', 'Service door has stayed open longer than two minutes.'], power: ['Power interruption', 'Station lost mains power and ran on backup.'] };
@@ -108,7 +129,7 @@
                 s.sessions = s.sessions.filter(x => x.id !== b.dataset.end); }); render(); toast('Session ended.'); });
         }
         if (tab === 'machine') {
-            $('admin-content').innerHTML = `<div class="machine-details"><section class="section-surface"><div class="section-title"><h2>Station diagnostics</h2>${badge(on ? 'Live device' : 'Simulated', on ? 'green' : undefined)}</div><div class="detail-list"><div><span>Controller</span><strong>ESP8266 / ${stationCode(d)}</strong></div><div><span>Station</span><strong>${stationLabel(d)}</strong></div><div><span>Status</span>${badge(d.station, d.station === 'ready' ? 'green' : 'amber')}</div><div><span>Bin fill level</span><strong>${d.bin}%${d.trashLevel ? ` · ${d.trashLevel}` : ''}${d.trashDistanceCm != null ? ` · ${d.trashDistanceCm} cm` : ''}</strong></div><div><span>Last bottle</span><strong>${on ? `${d.lastBottle || 'None'} · ${d.lastResult || 'Waiting'}` : (d.transactions[0] ? d.transactions[0].id : '—')}</strong></div><div><span>Last bottle weight</span><strong>${on ? `${d.lastWeightG || 0} g` : `${d.transactions[0] ? d.transactions[0].weight : 0} g`}</strong></div><div><span>Wi-Fi remaining</span><strong>${store.time(Math.max(0, d.expiresAt - Date.now()))}</strong></div><div><span>Last reward</span><strong>+${d.lastReward || 0} min</strong></div><div><span>Load cell</span>${badge(on ? 'Device' : 'Operational', on ? 'green' : undefined)}</div><div><span>Internet gateway</span>${badge(on ? 'SoftAP live' : 'Mock connection', 'blue')}</div></div></section><section class="section-surface"><div class="section-title"><h2>Station controls</h2></div><div class="machine-summary"><div class="form-row"><div><label for="maintenance">Maintenance mode</label><p>Temporarily suspend new deposits.</p></div><input id="maintenance" type="checkbox" class="toggle" ${d.station === 'maintenance' ? 'checked' : ''}></div><div class="form-row"><div><h3>Collection complete</h3><p>Record an emptied collection bin.</p></div><button class="button secondary" id="empty-bin">Empty bin</button></div></div></section></div>`;
+            $('admin-content').innerHTML = `<div class="machine-details"><section class="section-surface"><div class="section-title"><h2>Station diagnostics</h2>${badge(on ? 'Live device' : 'Waiting for device', on ? 'green' : undefined)}</div><div class="detail-list"><div><span>Controller</span><strong>ESP8266 / ${stationCode(d)}</strong></div><div><span>Station</span><strong>${stationLabel(d)}</strong></div><div><span>Status</span>${badge(d.station, d.station === 'ready' ? 'green' : 'amber')}</div><div><span>Bin fill level</span><strong>${d.bin}%${d.trashLevel ? ` · ${d.trashLevel}` : ''}${d.trashDistanceCm != null ? ` · ${d.trashDistanceCm} cm` : ''}</strong></div><div><span>Last bottle</span><strong>${on ? `${d.lastBottle || 'None'} · ${d.lastResult || 'Waiting'}` : (d.transactions[0] ? d.transactions[0].id : '—')}</strong></div><div><span>Last bottle weight</span><strong>${on ? `${d.lastWeightG || 0} g` : `${d.transactions[0] ? d.transactions[0].weight : 0} g`}</strong></div><div><span>Wi-Fi remaining</span><strong>${store.time(Math.max(0, d.expiresAt - Date.now()))}</strong></div><div><span>Last reward</span><strong>+${d.lastReward || 0} min</strong></div><div><span>Load cell</span>${badge(on ? 'Device' : 'Operational', on ? 'green' : undefined)}</div><div><span>Internet gateway</span>${badge(on ? 'SoftAP live' : 'Waiting for device', 'blue')}</div></div></section><section class="section-surface"><div class="section-title"><h2>Station controls</h2></div><div class="machine-summary"><div class="form-row"><div><label for="maintenance">Maintenance mode</label><p>Temporarily suspend new deposits.</p></div><input id="maintenance" type="checkbox" class="toggle" ${d.station === 'maintenance' ? 'checked' : ''}></div><div class="form-row"><div><h3>Collection complete</h3><p>Record an emptied collection bin.</p></div><button class="button secondary" id="empty-bin">Empty bin</button></div></div></section></div>`;
             $('maintenance').onchange = e => { store.update(s => { s.station = e.target.checked ? 'maintenance' : s.bin >= 100 ? 'full' : 'ready'; s.depositUntil = 0; }); render(); toast('Station availability updated.'); };
             $('empty-bin').onclick = () => { if (!confirm('Record that the bin has been emptied?'))
                 return; store.update(s => { s.bin = 0; if (s.station === 'full')
