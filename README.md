@@ -25,7 +25,7 @@ ESP8266 firmware posts JSON to `/api/ingest` with header `X-BottleNet-Key` (defa
 
 Separate board (`esp-32-code/esp.ino`): IR motion sensor (GPIO 27), brake/tamper switch (GPIO 26), buzzer (GPIO 25), LED (GPIO 33).
 
-- Keeps its own hotspot `ESP32_SECURITY` → http://192.168.4.1/ and also joins internet Wi‑Fi (set `WIFI_SSID` / `WIFI_PASSWORD` in the sketch).
+- Station-only Wi‑Fi (no hotspot): set `WIFI_SSID` / `WIFI_PASSWORD` in the sketch. Its local status page is at `http://<ESP32 IP>/` on the same network (IP is printed on Serial and shown in the admin).
 - Posts to `/api/security` on every sensor change plus a 5 s heartbeat, same `X-BottleNet-Key`.
 - Server stores the latest status and an event log in Neon (`bottlenet_security_status`, `bottlenet_security_events`): motion, theft attempts (with duration), device online/offline/restart. Offline = no update for 20 s.
 - `GET /api/security?limit=100` returns `{ online, status, events }`; `POST {"action":"ack","ids":[...]}` or `{"action":"ack","all":true}` acknowledges alarms.

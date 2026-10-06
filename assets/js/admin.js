@@ -218,8 +218,7 @@
             ['Firmware', st && st.firmware ? escape(st.firmware) : '—'],
             ['Network IP', st && st.ip ? escape(st.ip) : '—'],
             ['Wi-Fi signal', rssi],
-            ['Local hotspot', st && st.apSsid ? `${escape(st.apSsid)} · ${escape(st.apIp || '192.168.4.1')}` : '—'],
-            ['Hotspot clients', st && st.apClients != null ? st.apClients : '—'],
+            ['Local status page', st && st.ip ? `http://${escape(st.ip)}/` : '—'],
             ['Uptime', st ? fmtDur(st.uptimeMs) : '—'],
             ['Last update', st ? `<span data-ago="${st.updatedAt}">${ago(st.updatedAt)}</span>` : '—']
         ].map(([k, v]) => `<div><span>${k}</span><strong>${v}</strong></div>`).join('');
