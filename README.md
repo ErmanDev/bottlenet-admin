@@ -21,6 +21,15 @@ vercel --prod
 
 ESP8266 firmware posts JSON to `/api/ingest` with header `X-BottleNet-Key` (default `bottlenet-dev-key`).
 
+## ESP32 security unit (Security and alarms tab)
+
+Separate board (`esp-32-code/esp.ino`): IR motion sensor (GPIO 27), brake/tamper switch (GPIO 26), buzzer (GPIO 25), LED (GPIO 33).
+
+- Keeps its own hotspot `ESP32_SECURITY` → http://192.168.4.1/ and also joins internet Wi‑Fi (set `WIFI_SSID` / `WIFI_PASSWORD` in the sketch).
+- Posts to `/api/security` on every sensor change plus a 5 s heartbeat, same `X-BottleNet-Key`.
+- Server stores the latest status and an event log in Neon (`bottlenet_security_status`, `bottlenet_security_events`): motion, theft attempts (with duration), device online/offline/restart. Offline = no update for 20 s.
+- `GET /api/security?limit=100` returns `{ online, status, events }`; `POST {"action":"ack","ids":[...]}` or `{"action":"ack","all":true}` acknowledges alarms.
+
 ## Related
 
 - SoftAP kiosk UI lives on the ESP8266 (`PlasticBottle_WiFi` → http://192.168.4.1/)

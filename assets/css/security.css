@@ -1,4 +1,4 @@
-/* Security and alarm views. Mock data only: no real sensor feed. */
+/* Security and alarm views — live ESP32 security unit (/api/security). */
 .alarm-banner{
   position:relative;
   display:flex;
@@ -158,3 +158,64 @@
   width:17px;
   height:17px
 }
+
+/* ESP32 security unit: live sensor cards mirror the device's own green/red page. */
+.sec-status{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+  margin-bottom:24px
+}
+.sec-card{
+  padding:18px 19px;
+  border:1px solid var(--line);
+  border-left:4px solid #c9d1cc;
+  border-radius:6px;
+  background:#fff
+}
+.sec-card-label{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.4px;
+  text-transform:uppercase
+}
+.sec-card-label svg{width:15px;height:15px}
+.sec-card-value{
+  margin:12px 0 7px;
+  font-size:22px;
+  font-weight:800
+}
+.sec-card-foot{font-size:11px;color:var(--muted)}
+.sec-card.ok{border-left-color:var(--green)}
+.sec-card.ok .sec-card-value{color:var(--green)}
+.sec-card.warn{border-left-color:#d79a2b}
+.sec-card.warn .sec-card-value{color:#956c20}
+.sec-card.idle .sec-card-value{color:var(--muted)}
+.sec-card.alert{
+  border-color:#e8b7b1;
+  border-left-color:#c0544b;
+  background:#fff0ee;
+  animation:sec-pulse 1.6s ease-in-out infinite
+}
+.sec-card.alert .sec-card-value{color:#ad4940}
+@keyframes sec-pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(192,84,75,0)}
+  50%{box-shadow:0 0 0 5px rgba(192,84,75,.16)}
+}
+.sec-details{margin-bottom:24px}
+.sec-note{margin:14px 21px 4px;font-size:12px}
+.alarm-row.critical td:first-child{box-shadow:inset 3px 0 0 #c0544b}
+.alarm-row.warning td:first-child{box-shadow:inset 3px 0 0 #d79a2b}
+[data-theme="dark"] .sec-card{background:var(--surface);border-color:var(--line);border-left-color:#3a443e}
+[data-theme="dark"] .sec-card.ok{border-left-color:var(--green)}
+[data-theme="dark"] .sec-card.warn{border-left-color:#e0b055}
+[data-theme="dark"] .sec-card.warn .sec-card-value{color:#e0b055}
+[data-theme="dark"] .sec-card.alert{background:#2c1917;border-color:#5a2a25;border-left-color:#e2837a}
+[data-theme="dark"] .sec-card.alert .sec-card-value{color:#e2837a}
+@media (max-width:1100px){.sec-status{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.sec-status{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.sec-card.alert{animation:none}}

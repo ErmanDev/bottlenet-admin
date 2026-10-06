@@ -37,6 +37,7 @@
     }
 
     function updateBadges() {
+        if (document.body && document.body.dataset.adminTab === 'security') return; // ESP32 owns the header there
         document.querySelectorAll('#mode-badge').forEach(el => {
             el.textContent = live ? 'Live' : 'Waiting';
             el.className = `mode-badge ${live ? 'live' : 'offline'}`;

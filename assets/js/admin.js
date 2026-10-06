@@ -59,10 +59,19 @@
             applyThemeIcon();
         };
     }
-    const descriptions = { overview: ['Station overview', 'A live look at your station and its impact.'], transactions: ['Transactions', 'Every bottle and every connection, accounted for.'], sessions: ['Active sessions', 'Manage the connections your station makes possible.'], machine: ['Machine status', 'Station health, collection capacity, and maintenance.'], security: ['Security and alarms', 'Bin tampering, unauthorised access, and alarm history.'], settings: ['Station settings', 'Manage bottle acceptance and connection rewards.'] };
+    const descriptions = { overview: ['Station overview', 'A live look at your station and its impact.'], transactions: ['Transactions', 'Every bottle and every connection, accounted for.'], sessions: ['Active sessions', 'Manage the connections your station makes possible.'], machine: ['Machine status', 'Station health, collection capacity, and maintenance.'], security: ['Security and alarms', 'Live motion and anti-theft monitoring from the ESP32 security unit.'], settings: ['Station settings', 'Manage bottle acceptance and connection rewards.'] };
     const badge = (text, color = 'green') => `<span class="badge ${color}">${text}</span>`;
-    const alarmTypes = { bin_opened: ['Collection bin opened', 'Lid switch triggered outside a scheduled collection.'], bottle_removed: ['Bottles removed from bin', 'Bin weight dropped without a collection being recorded.'], tamper: ['Tamper detected', 'Enclosure movement or shock sensed by the tamper sensor.'], door_open: ['Service door left open', 'Service door has stayed open longer than two minutes.'], power: ['Power interruption', 'Station lost mains power and ran on backup.'] };
-    const openAlarms = d => (d.alarms || []).filter(a => !a.ack);
+    const sec = window.BottleNetSecurity;
+    let secFilter = 'all';
+    const escape = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const fmtStamp = ms => new Date(ms).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    function fmtDur(ms) {
+        const s = Math.max(0, Math.round(ms / 1000));
+        if (s < 60) return `${s}s`;
+        const m = Math.floor(s / 60), h = Math.floor(m / 60);
+        return h ? `${h}h ${m % 60}m` : `${m}m ${s % 60}s`;
+    }
+    const ago = ms => ms ? `${fmtDur(sec.now() - ms)} ago` : '—';
     const metric = (label, value, foot) => `<div class="metric"><div class="metric-label">${label}<span>↗</span></div><div class="metric-value">${value}</div><div class="metric-foot">${foot}</div></div>`;
     function rows(transactions) { return transactions.length ? transactions.map(t => `<tr><td>${t.id}</td><td>${new Date(t.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${t.session}</td><td>${t.size && store.get().sizes[t.size] ? store.get().sizes[t.size].label : '—'}</td><td>${t.weight.toFixed(1)} g</td><td>${badge(t.accepted ? 'Accepted' : 'Rejected', t.accepted ? 'green' : 'red')}</td><td>${t.minutes ? `+${t.minutes} min` : '—'}</td></tr>`).join('') : '<tr><td colspan="7" class="empty-state">No matching transactions.</td></tr>'; }
     const table = transactions => `<div class="table-wrap"><table><thead><tr><th>TRANSACTION</th><th>TIME</th><th>SESSION</th><th>BOTTLE</th><th>WEIGHT</th><th>RESULT</th><th>TIME AWARDED</th></tr></thead><tbody id="transaction-rows">${rows(transactions)}</tbody></table></div>`;
@@ -74,16 +83,7 @@
             return;
         const d = store.get(), active = d.sessions.filter(s => s.expiresAt > Date.now()), own = d.expiresAt > Date.now();
         const on = live();
-        const modeBadge = $('mode-badge');
-        if (modeBadge) {
-            modeBadge.textContent = on ? 'Live' : 'Waiting';
-            modeBadge.className = `mode-badge ${on ? 'live' : 'demo'}`;
-            modeBadge.title = on ? 'Receiving ESP8266 status' : 'Waiting for ESP8266 ingest';
-        }
-        const ws = $('workspace-badge');
-        if (ws) { ws.textContent = on ? 'Live ESP8266' : 'Waiting for ESP8266'; ws.className = on ? 'badge green' : 'badge'; }
-        const foot = $('updated-label');
-        if (foot) foot.textContent = on ? 'Live from ESP8266' : 'Waiting for device ingest';
+        renderHeaderStatus();
         const sideName = $('sidebar-station-name');
         if (sideName) sideName.textContent = stationLabel(d);
         $('breadcrumb').textContent = tab[0].toUpperCase() + tab.slice(1);
@@ -93,18 +93,7 @@
         if (eyebrow) eyebrow.textContent = stationLabel(d).toUpperCase();
         document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
         $('sidebar-status').textContent = d.station === 'ready' ? 'Station online' : d.station[0].toUpperCase() + d.station.slice(1);
-        const unread = openAlarms(d);
-        const worst = unread.some(a => a.level === 'critical');
-        $('alarm-banner').hidden = !unread.length;
-        const latest = unread[0];
-        $('alarm-banner').dataset.level = worst ? 'critical' : 'warning';
-        if (latest) {
-            $('alarm-banner-level').textContent = worst ? 'CRITICAL' : 'WARNING';
-            $('alarm-banner-title').textContent = alarmTypes[latest.type][0];
-            $('alarm-banner-text').textContent = `${alarmTypes[latest.type][1]} · ${stationLabel(d)} · ${new Date(latest.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${unread.length > 1 ? ` · +${unread.length - 1} more open alarm${unread.length > 2 ? 's' : ''}` : ''}`;
-        }
-        const navCount = document.querySelector('[data-tab="security"] .nav-count');
-        if (navCount) { navCount.textContent = unread.length; navCount.hidden = !unread.length; }
+        renderAlarmChrome();
         if (tab === 'overview') {
             $('admin-content').innerHTML = `<section class="metrics">${metric('Bottles collected today', d.bottles, 'Collected for a better tomorrow')}${metric('Active connections', active.length + Number(own), 'Devices connected right now')}${metric('Minutes awarded today', d.transactions.filter(t => t.accepted).reduce((n, t) => n + (Number(t.minutes)||0), 0), 'More time to stay connected')}${metric('Bin capacity', `${d.bin}%`, d.bin >= 90 ? 'Collection needed' : 'Space for more good habits')}</section><div class="overview-grid"><section class="section-surface"><div class="section-title"><div><h2>A week of small changes</h2><p>Bottles collected over the last 7 days</p></div>${badge('This week')}</div><div class="chart" role="img" aria-label="Daily bottle collection: ${d.collections.join(', ')}">${d.collections.map((n, i) => `<div class="chart-column"><div class="chart-bar" style="height:${n / Math.max(...d.collections) * 115}px" title="${n} bottles"></div><span>${['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Today'][i]}</span></div>`).join('')}</div><div class="chart-footer"><span>Every bottle makes a difference</span><strong>${d.collections.reduce((a, b) => a + b, 0)} bottles</strong></div></section><section class="section-surface"><div class="section-title"><h2>Your station</h2>${badge(d.station === 'ready' ? 'Online' : d.station, d.station === 'ready' ? 'green' : 'amber')}</div><div class="machine-summary"><div class="machine-summary-row"><span>${stationLabel(d)}</span><span class="muted">${stationCode(d)}</span></div><div class="machine-summary-row"><span>Collection bin</span><strong>${d.bin}% full${d.trashLevel ? ` · ${d.trashLevel}` : ''}</strong></div>${on ? `<div class="machine-summary-row"><span>Last bottle</span><strong>${d.lastBottle || 'None'} · ${d.lastWeightG || 0} g · ${d.lastResult || 'Waiting'}</strong></div><div class="machine-summary-row"><span>Wi-Fi remaining</span><strong>${store.time(Math.max(0, d.expiresAt - Date.now()))}</strong></div>` : ''}<div class="progress-track"><div class="progress-fill" style="width:${d.bin}%"></div></div><p>${d.bin >= 90 ? 'Ready for collection' : 'Collection capacity available'}</p><button class="button secondary full" id="view-machine">View machine details →</button></div></section></div><section class="section-surface"><div class="section-title"><div><h2>Recent transactions</h2><p>The latest activity at your station</p></div><button class="text-button" id="view-transactions">View all →</button></div>${table(d.transactions.slice(0, 5))}</section>`;
             $('view-machine').onclick = () => navigate('machine');
@@ -136,10 +125,11 @@
                 s.station = 'ready'; }); render(); toast('Bin collection recorded.'); };
         }
         if (tab === 'security') {
-            const alarms = d.alarms || [];
-            $('admin-content').innerHTML = `<section class="section-surface"><div class="section-title"><div><h2>Alarm history</h2><p>Bin, enclosure, and power events at this station.</p></div><button class="text-button" id="ack-all" ${openAlarms(d).length ? '' : 'disabled'}>Acknowledge all</button></div><div class="table-wrap"><table><thead><tr><th>ALARM</th><th>TIME</th><th>EVENT</th><th>SEVERITY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>${alarms.length ? alarms.map(a => `<tr class="alarm-row ${a.level}"><td>${a.id}</td><td>${new Date(a.time).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td><strong>${alarmTypes[a.type][0]}</strong><br><span class="muted">${alarmTypes[a.type][1]}</span></td><td>${badge(a.level === 'critical' ? 'Critical' : 'Warning', a.level === 'critical' ? 'red' : 'amber')}</td><td>${a.ack ? badge('Acknowledged', 'green') : badge('Open', 'red')}</td><td>${a.ack ? '—' : `<button class="text-button" data-ack="${a.id}">Acknowledge</button>`}</td></tr>`).join('') : '<tr><td colspan="6" class="empty-state">No alarms recorded.</td></tr>'}</tbody></table></div><p class="muted">Demo only: alarms are simulated in the browser. Production needs hardware sensors and server-side alerting.</p></section>`;
-            document.querySelectorAll('[data-ack]').forEach(b => b.onclick = () => { store.update(s => { const alarm = s.alarms.find(a => a.id === b.dataset.ack); if (alarm) alarm.ack = true; }); render(); toast('Alarm acknowledged.'); });
-            $('ack-all').onclick = () => { store.update(s => s.alarms.forEach(a => a.ack = true)); render(); toast('All alarms acknowledged.'); };
+            $('admin-content').innerHTML = `<section id="sec-status" class="sec-status" aria-live="polite"></section><div class="machine-details sec-details"><section class="section-surface"><div class="section-title"><h2>ESP32 security unit</h2><span id="sec-unit-badge"></span></div><div id="sec-diagnostics" class="detail-list"></div></section><section class="section-surface"><div class="section-title"><div><h2>Last 24 hours</h2><p>What the security unit has logged.</p></div></div><div id="sec-summary" class="detail-list"></div></section></div><section class="section-surface"><div class="section-title"><div><h2>Security log</h2><p>Motion, theft attempts, and device connectivity — stored on the server.</p></div><button class="text-button" id="ack-all">Acknowledge all</button></div><div class="table-toolbar"><select id="sec-filter" aria-label="Filter events"><option value="all">All events</option><option value="alarms">Open alarms</option><option value="tamper">Theft attempts</option><option value="motion">Motion</option><option value="device">Device connectivity</option></select></div><div class="table-wrap"><table><thead><tr><th>TIME</th><th>EVENT</th><th>SEVERITY</th><th>DURATION</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody id="sec-rows"></tbody></table></div><p id="sec-note" class="muted sec-note"></p></section>`;
+            $('sec-filter').value = secFilter;
+            $('sec-filter').onchange = e => { secFilter = e.target.value; renderSecurityLive(); };
+            $('ack-all').onclick = () => acknowledge('all');
+            renderSecurityLive();
         }
         if (tab === 'settings') {
             $('admin-content').innerHTML = `<form id="settings-form" class="settings-form">${Object.entries(d.sizes).map(([key, size]) => `<div class="form-row"><div><label for="minutes-${key}">${size.label}</label><p>Minutes awarded for a ${size.short} bottle (${size.minWeight}–${size.maxWeight} g).</p></div><input class="field" id="minutes-${key}" data-size="${key}" type="number" min="1" max="120" required value="${size.minutes}"></div>`).join('')}<div class="form-row"><div><label for="min-weight">Minimum bottle weight</label><p>Lower acceptance threshold, in grams.</p></div><input class="field" id="min-weight" type="number" min="1" max="200" step="0.1" required value="${d.minWeight}"></div><div class="form-row"><div><label for="max-weight">Maximum bottle weight</label><p>Upper acceptance threshold, in grams.</p></div><input class="field" id="max-weight" type="number" min="1" max="200" step="0.1" required value="${d.maxWeight}"></div><div class="form-row"><div><h3>Administrator PIN</h3><p>Demo PIN is 1234. Production authentication requires a backend.</p></div>${badge('Demo only')}</div><button class="button primary" type="submit">Save changes</button></form>`;
@@ -150,10 +140,117 @@
         }
     }
     function toast(text) { $('admin-toast').textContent = text; }
-    $('export-button').onclick = () => { const d = store.get(), csv = [['Transaction', 'Timestamp', 'Session', 'Bottle', 'Weight (g)', 'Result', 'Minutes'], ...d.transactions.map(t => [t.id, new Date(t.time).toISOString(), t.session, t.size && d.sizes[t.size] ? d.sizes[t.size].label : '', t.weight, t.accepted ? 'Accepted' : 'Rejected', t.minutes])].map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })), a = document.createElement('a'); a.href = url; a.download = 'bottlenet-transactions.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); toast('Transaction export downloaded.'); };
+    /* Header badges follow the device behind the current tab: ESP32 on Security, ESP8266 elsewhere. */
+    function renderHeaderStatus() {
+        document.body.dataset.adminTab = tab;
+        let on, label, title, footText;
+        if (tab === 'security') {
+            const s = sec.get();
+            on = s.online;
+            label = on ? 'Live ESP32' : s.status ? 'ESP32 offline' : 'Waiting for ESP32';
+            title = on ? 'Receiving ESP32 security status' : 'No recent update from the ESP32 security unit';
+            footText = on ? 'Live from ESP32 security unit' : 'Waiting for ESP32 security unit';
+        } else {
+            on = live();
+            label = on ? 'Live ESP8266' : 'Waiting for ESP8266';
+            title = on ? 'Receiving ESP8266 status' : 'Waiting for ESP8266 ingest';
+            footText = on ? 'Live from ESP8266' : 'Waiting for device ingest';
+        }
+        const modeBadge = $('mode-badge');
+        if (modeBadge) { modeBadge.textContent = on ? 'Live' : 'Waiting'; modeBadge.className = `mode-badge ${on ? 'live' : 'demo'}`; modeBadge.title = title; }
+        const ws = $('workspace-badge');
+        if (ws) { ws.textContent = label; ws.className = on ? 'badge green' : 'badge'; }
+        const foot = $('updated-label');
+        if (foot) foot.textContent = footText;
+    }
+    function renderAlarmChrome() {
+        const open = sec.openAlarms();
+        const s = sec.get(), st = s.status;
+        const activeTamper = s.online && st && st.tamper, activeMotion = s.online && st && st.motion;
+        const show = open.length || activeTamper || activeMotion;
+        const critical = activeTamper || open.some(a => a.level === 'critical');
+        $('alarm-banner').hidden = !show;
+        $('alarm-banner').dataset.level = critical ? 'critical' : 'warning';
+        if (show) {
+            const latest = open[0];
+            const [title, text] = activeTamper ? sec.describe('tamper') : activeMotion ? sec.describe('motion') : sec.describe(latest.type);
+            const when = activeTamper || activeMotion ? 'happening now' : new Date(latest.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            $('alarm-banner-level').textContent = critical ? 'CRITICAL' : 'WARNING';
+            $('alarm-banner-title').textContent = title;
+            $('alarm-banner-text').textContent = `${text} · ${stationLabel(store.get())} · ${when}${open.length ? ` · ${open.length} open alarm${open.length > 1 ? 's' : ''}` : ''}`;
+        }
+        const navCount = document.querySelector('[data-tab="security"] .nav-count');
+        if (navCount) { navCount.textContent = open.length; navCount.hidden = !open.length; }
+    }
+    const secCard = (icon, label, value, sub, state) => `<div class="sec-card ${state}"><div class="sec-card-label"><i data-lucide="${icon}"></i>${label}</div><div class="sec-card-value">${value}</div><div class="sec-card-foot">${sub}</div></div>`;
+    function securityRows(s) {
+        const events = s.events.filter(e => secFilter === 'all' || (secFilter === 'alarms' ? !e.acked && e.level !== 'info' : secFilter === 'device' ? e.type.startsWith('device_') : e.type === secFilter));
+        if (!events.length) return `<tr><td colspan="6" class="empty-state">${s.events.length ? 'No matching events.' : 'No security events recorded yet.'}</td></tr>`;
+        return events.map(e => {
+            const [title, text] = sec.describe(e.type);
+            const ongoing = !e.endedAt && (e.type === 'motion' || e.type === 'tamper' || e.type === 'device_offline');
+            let duration = '—';
+            if (e.meta && e.meta.brief) duration = `Brief${e.meta.triggers > 1 ? ` ×${e.meta.triggers}` : ''}`;
+            else if (e.endedAt) duration = fmtDur(e.endedAt - e.startedAt);
+            else if (ongoing) duration = s.online || e.type === 'device_offline' ? `<span data-since="${e.startedAt}">${fmtDur(sec.now() - e.startedAt)}</span>` : 'Unknown';
+            const sev = e.level === 'critical' ? badge('Critical', 'red') : e.level === 'warning' ? badge('Warning', 'amber') : badge('Info', 'blue');
+            const state = e.level === 'info' ? badge('Logged') : e.acked ? badge('Acknowledged', 'green') : badge('Open', 'red');
+            const live = ongoing && (s.online || e.type === 'device_offline') ? ` ${badge('Active', 'red')}` : '';
+            const extra = e.type === 'device_online' && e.meta && e.meta.ip ? ` · IP ${escape(e.meta.ip)}` : '';
+            return `<tr class="alarm-row ${e.level}"><td>${fmtStamp(e.startedAt)}</td><td><strong>${title}</strong><br><span class="muted">${text}${extra}</span></td><td>${sev}</td><td>${duration}</td><td>${state}${live}</td><td>${e.acked || e.level === 'info' ? '—' : `<button class="text-button" data-sec-ack="${e.id}">Acknowledge</button>`}</td></tr>`;
+        }).join('');
+    }
+    function renderSecurityLive() {
+        if (!unlocked || tab !== 'security' || !$('sec-status')) return;
+        const s = sec.get(), st = s.status, on = s.online;
+        const known = on ? '' : st ? ' · last known' : '';
+        const idle = !on;
+        $('sec-status').innerHTML = [
+            secCard('shield', 'Security unit', on ? 'Online' : st ? 'Offline' : 'Waiting', st ? `Last update <span data-ago="${st.updatedAt}">${ago(st.updatedAt)}</span>` : (s.loaded ? 'No data received yet' : 'Connecting…'), on ? 'ok' : st ? 'warn' : 'idle'),
+            secCard('radar', 'IR sensor', st ? (st.motion ? 'Motion detected!' : 'No motion') : '—', `GPIO 27${st ? ` · ${st.motionCount} trigger${st.motionCount === 1 ? '' : 's'} since boot` : ''}${known}`, !st ? 'idle' : st.motion ? (idle ? 'warn' : 'alert') : (idle ? 'idle' : 'ok')),
+            secCard(st && st.tamper ? 'lock-open' : 'lock', 'Brake switch', st ? (st.tamper ? 'Trying to steal!' : 'Secure') : '—', `GPIO 26${st ? ` · ${st.tamperCount} trigger${st.tamperCount === 1 ? '' : 's'} since boot` : ''}${known}`, !st ? 'idle' : st.tamper ? (idle ? 'warn' : 'alert') : (idle ? 'idle' : 'ok')),
+            secCard('siren', 'Buzzer & LED', st ? (st.alarm ? 'Sounding' : 'Silent') : '—', `Buzzer GPIO 25 · LED GPIO 33${known}`, !st ? 'idle' : st.alarm ? (idle ? 'warn' : 'alert') : (idle ? 'idle' : 'ok'))
+        ].join('');
+        $('sec-unit-badge').innerHTML = badge(on ? 'Online' : st ? 'Offline' : 'Waiting for ESP32', on ? 'green' : st ? 'amber' : undefined);
+        const rssi = st && st.rssi != null ? `${st.rssi} dBm · ${st.rssi >= -60 ? 'Strong' : st.rssi >= -72 ? 'Fair' : 'Weak'}` : '—';
+        $('sec-diagnostics').innerHTML = [
+            ['Device ID', st ? escape(st.deviceId) : '—'],
+            ['Firmware', st && st.firmware ? escape(st.firmware) : '—'],
+            ['Network IP', st && st.ip ? escape(st.ip) : '—'],
+            ['Wi-Fi signal', rssi],
+            ['Local hotspot', st && st.apSsid ? `${escape(st.apSsid)} · ${escape(st.apIp || '192.168.4.1')}` : '—'],
+            ['Hotspot clients', st && st.apClients != null ? st.apClients : '—'],
+            ['Uptime', st ? fmtDur(st.uptimeMs) : '—'],
+            ['Last update', st ? `<span data-ago="${st.updatedAt}">${ago(st.updatedAt)}</span>` : '—']
+        ].map(([k, v]) => `<div><span>${k}</span><strong>${v}</strong></div>`).join('');
+        const day = sec.now() - 864e5, recent = s.events.filter(e => e.startedAt >= day);
+        const count = t => recent.filter(e => e.type === t).length;
+        const open = sec.openAlarms();
+        $('sec-summary').innerHTML = [
+            ['Theft attempts', count('tamper'), count('tamper') ? 'red' : 'green'],
+            ['Motion events', count('motion'), count('motion') ? 'amber' : 'green'],
+            ['Offline periods', count('device_offline'), count('device_offline') ? 'amber' : 'green'],
+            ['Device restarts', count('device_restart'), undefined],
+            ['Open alarms', open.length, open.length ? 'red' : 'green']
+        ].map(([k, v, c]) => `<div><span>${k}</span>${badge(v, c)}</div>`).join('');
+        $('sec-rows').innerHTML = securityRows(s);
+        $('ack-all').disabled = !open.length;
+        $('sec-note').textContent = s.storage === 'ephemeral' ? 'Logs are temporary: DATABASE_URL is not set, so events reset when the server restarts.' : `The ESP32 reports every few seconds; the unit is marked offline after ${Math.round(s.offlineAfterMs / 1000)} seconds without an update.`;
+        if (window.lucide) window.lucide.createIcons();
+    }
+    async function acknowledge(ids) {
+        try { await sec.ack(ids); toast(ids === 'all' ? 'All alarms acknowledged.' : 'Alarm acknowledged.'); }
+        catch { toast('Could not reach the server. Try again.'); }
+    }
+    $('admin-content').addEventListener('click', e => { const b = e.target.closest('[data-sec-ack]'); if (b) { b.disabled = true; acknowledge(Number(b.dataset.secAck)); } });
+    function exportSecurity() {
+        const csv = [['Event ID', 'Started', 'Ended', 'Event', 'Severity', 'Duration (s)', 'Acknowledged'], ...sec.get().events.map(e => [e.id, new Date(e.startedAt).toISOString(), e.endedAt ? new Date(e.endedAt).toISOString() : '', sec.describe(e.type)[0], e.level, e.endedAt ? Math.round((e.endedAt - e.startedAt) / 1000) : '', e.level === 'info' ? '' : e.acked ? 'Yes' : 'No'])].map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })), a = document.createElement('a'); a.href = url; a.download = 'bottlenet-security-log.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); toast('Security log export downloaded.');
+    }
+    $('export-button').onclick = () => { if (tab === 'security') { exportSecurity(); return; } const d = store.get(), csv = [['Transaction', 'Timestamp', 'Session', 'Bottle', 'Weight (g)', 'Result', 'Minutes'], ...d.transactions.map(t => [t.id, new Date(t.time).toISOString(), t.session, t.size && d.sizes[t.size] ? d.sizes[t.size].label : '', t.weight, t.accepted ? 'Accepted' : 'Rejected', t.minutes])].map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })), a = document.createElement('a'); a.href = url; a.download = 'bottlenet-transactions.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); toast('Transaction export downloaded.'); };
     window.addEventListener('storage', () => { if (tab !== 'settings')
         render(); });
-    window.addEventListener('bottlenet-change', () => { if (unlocked && tab !== 'settings')
+    window.addEventListener('bottlenet-change', () => { if (unlocked && tab !== 'settings' && tab !== 'security')
         render(); });
     window.addEventListener('bottlenet-mode', () => { if (unlocked)
         render(); });
@@ -161,7 +258,9 @@
         return; let expired = false; document.querySelectorAll('[data-expiry]').forEach(el => { el.textContent = store.time(Number(el.dataset.expiry) - Date.now()); if (Number(el.dataset.expiry) <= Date.now())
         expired = true; }); if (expired)
         render(); }, 1000);
+    window.addEventListener('bottlenet-security', () => { if (!unlocked) return; renderAlarmChrome(); renderSecurityLive(); if (tab === 'security') renderHeaderStatus(); });
+    setInterval(() => { if (!unlocked || tab !== 'security') return; document.querySelectorAll('[data-ago]').forEach(el => { el.textContent = ago(Number(el.dataset.ago)); }); document.querySelectorAll('[data-since]').forEach(el => { el.textContent = fmtDur(sec.now() - Number(el.dataset.since)); }); }, 1000);
     $('alarm-review').onclick = () => navigate('security');
-    $('alarm-ack-all').onclick = () => { store.update(s => s.alarms.forEach(a => a.ack = true)); render(); toast('All alarms acknowledged.'); };
+    $('alarm-ack-all').onclick = () => acknowledge('all');
     show();
 })();
