@@ -1145,3 +1145,68 @@ select {
   background: #c2281f;
   color: #fff;
 }
+/* Table pagination, shared by the security log and portal reports. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+}
+.pager-size select {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.pager-button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pager-button:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+}
+.pager-button.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+  font-weight: 700;
+}
+.pager-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pager-button svg {
+  width: 15px;
+  height: 15px;
+}
+.pager-gap {
+  padding: 0 4px;
+}
+[data-theme="dark"] .pager-button.active {
+  color: #0f1a14;
+}

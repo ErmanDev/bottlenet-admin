@@ -9,7 +9,7 @@
             const name = el.classList.contains('wifi-symbol') ? 'wifi' : el.classList.contains('login-icon') ? 'lock-keyhole' : 'recycle';
             el.innerHTML = `<i data-lucide="${name}"></i>`;
         });
-        const names = { overview: 'layout-dashboard', transactions: 'arrow-left-right', sessions: 'wifi', machine: 'cpu', security: 'shield-alert', settings: 'settings' };
+        const names = { overview: 'layout-dashboard', transactions: 'arrow-left-right', sessions: 'wifi', machine: 'cpu', security: 'shield-alert', reports: 'message-square-warning', settings: 'settings' };
         document.querySelectorAll('[data-tab] > span:first-child').forEach(el => { if (!el.querySelector('svg'))
             el.innerHTML = `<i data-lucide="${names[el.parentElement.dataset.tab]}"></i>`; });
         window.lucide.createIcons();
