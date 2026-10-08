@@ -64,7 +64,7 @@
     const sec = window.BottleNetSecurity;
     const reports = window.BottleNetReports;
     let secFilter = 'all', secPage = 1, secPageSize = 10;
-    let repStatus = 'all', repCategory = 'all', repQuery = '', repPage = 1, repPageSize = 10, repOpen = null;
+    let repStatus = 'all', repType = 'all', repQuery = '', repPage = 1, repPageSize = 10, repOpen = null;
     const PAGE_SIZES = [10, 25, 50];
     function paginate(list, page, size) {
         const pages = Math.max(1, Math.ceil(list.length / size)), p = Math.min(Math.max(1, page), pages);
@@ -147,13 +147,13 @@
             renderSecurityLive();
         }
         if (tab === 'reports') {
-            $('admin-content').innerHTML = `<section id="rep-metrics" class="metrics"></section><section class="section-surface"><div class="section-title"><div><h2>Report inbox</h2><p>Problems and feedback submitted from the BottleNet Wi-Fi portal.</p></div><span id="rep-badge"></span></div><div class="table-toolbar"><input id="rep-search" class="field" placeholder="Search message, device, or report ID" aria-label="Search reports"><select id="rep-status" aria-label="Filter status"><option value="all">All statuses</option>${Object.entries(reports.STATUSES).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select><select id="rep-category" aria-label="Filter category"><option value="all">All categories</option>${Object.entries(reports.CATEGORIES).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select></div><div class="table-wrap"><table><thead><tr><th>RECEIVED</th><th>CATEGORY</th><th>MESSAGE</th><th>REPORTED BY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody id="rep-rows"></tbody></table></div><div id="rep-pager"></div><p id="rep-note" class="muted sec-note"></p></section>`;
+            $('admin-content').innerHTML = `<section id="rep-metrics" class="metrics"></section><section class="section-surface"><div class="section-title"><div><h2>Report inbox</h2><p>Problems users submitted with “Report a Problem” on the station's Wi-Fi portal.</p></div><span id="rep-badge"></span></div><div class="table-toolbar"><input id="rep-search" class="field" placeholder="Search description, device, or report ID" aria-label="Search reports"><select id="rep-status" aria-label="Filter status"><option value="all">All statuses</option>${Object.entries(reports.STATUSES).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('')}</select><select id="rep-type" aria-label="Filter problem type"><option value="all">All problem types</option>${Object.keys(reports.TYPES).map(t => `<option value="${escape(t)}">${escape(t)}</option>`).join('')}</select></div><div class="table-wrap"><table><thead><tr><th>RECEIVED</th><th>PROBLEM</th><th>DESCRIPTION</th><th>DEVICE</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody id="rep-rows"></tbody></table></div><div id="rep-pager"></div><p id="rep-note" class="muted sec-note"></p></section>`;
             $('rep-search').value = repQuery;
             $('rep-status').value = repStatus;
-            $('rep-category').value = repCategory;
+            $('rep-type').value = repType;
             $('rep-search').oninput = e => { repQuery = e.target.value; repPage = 1; renderReportsLive(); };
             $('rep-status').onchange = e => { repStatus = e.target.value; repPage = 1; renderReportsLive(); };
-            $('rep-category').onchange = e => { repCategory = e.target.value; repPage = 1; renderReportsLive(); };
+            $('rep-type').onchange = e => { repType = e.target.value; repPage = 1; renderReportsLive(); };
             renderReportsLive();
         }
         if (tab === 'settings') {
@@ -274,24 +274,35 @@
         const n = reports.unread().length;
         navCount.textContent = n; navCount.hidden = !n;
     }
-    const reportMatches = r => (repStatus === 'all' || (r.status || 'new') === repStatus) && (repCategory === 'all' || (reports.CATEGORIES[r.category] ? r.category : 'other') === repCategory) && [r.id, r.message, r.contact, r.deviceMac, r.ip, r.sessionId].filter(v => v != null).join(' ').toLowerCase().includes(repQuery.trim().toLowerCase());
-    const reporter = r => escape(r.contact || r.deviceMac || r.ip || 'Anonymous');
+    const reportType = r => reports.TYPES[r.type] ? r.type : 'Other';
+    const reportMatches = r => (repStatus === 'all' || (r.status || 'new') === repStatus) && (repType === 'all' || reportType(r) === repType) && [r.id, r.type, r.description, r.deviceMac, r.ip, r.stationId, r.stationName].filter(v => v != null).join(' ').toLowerCase().includes(repQuery.trim().toLowerCase());
+    const reporter = r => escape(r.deviceMac || r.ip || 'Unknown device');
+    /* Machine state the ESP8266 attached when the report was submitted. */
+    function machineFacts(m) {
+        if (!m) return [];
+        const bottle = m.lastBottle && m.lastBottle !== 'None' ? `${m.lastBottle} · ${m.lastResult || '—'}${m.lastWeightG != null ? ` · ${m.lastWeightG} g` : ''}` : 'None yet';
+        const bin = m.trashLevel ? `${m.trashLevel}${m.trashDistanceCm ? ` · ${m.trashDistanceCm} cm` : ''}` : '';
+        return [['Last bottle', bottle], ['Collection bin', bin], ['Scale', m.scaleReady == null ? '' : m.scaleReady ? 'Ready' : 'Not detected'], ['Wi-Fi time left', m.wifiRemainingMs != null ? store.time(m.wifiRemainingMs) : ''], ['Portal clients', m.apClients], ['Station uptime', m.uptimeS != null ? fmtDur(m.uptimeS * 1000) : '']];
+    }
     function reportDetail(r) {
         const st = r.status || 'new';
         const actions = [st === 'new' ? ['in_progress', 'Mark in progress', 'secondary'] : null, st !== 'resolved' ? ['resolved', 'Mark resolved', 'primary'] : ['new', 'Reopen', 'secondary']].filter(Boolean);
-        const meta = [['Report ID', r.id], ['Received', fmtStamp(r.createdAt)], ['Contact', r.contact], ['Device MAC', r.deviceMac], ['IP address', r.ip], ['Session', r.sessionId], ['Last updated', r.updatedAt ? fmtStamp(r.updatedAt) : '']];
-        return `<tr class="report-detail"><td colspan="6"><div class="report-detail-body"><div><span class="eyebrow">MESSAGE</span><p class="report-full">${escape(r.message) || '<span class="muted">No message provided.</span>'}</p></div><dl class="report-meta">${meta.map(([k, v]) => `<div><dt>${k}</dt><dd>${v ? escape(v) : '—'}</dd></div>`).join('')}</dl><div class="report-actions">${actions.map(([next, label, kind]) => `<button type="button" class="button ${kind}" data-rep-status="${next}" data-id="${escape(r.id)}">${label}</button>`).join('')}</div></div></td></tr>`;
+        const station = r.stationName || r.stationId ? `${r.stationName || 'Station'}${r.stationId ? ` (${r.stationId})` : ''}` : '';
+        const meta = [['Report ID', r.id], ['Received', fmtStamp(r.createdAt)], ['Station', station], ['Device MAC', r.deviceMac], ['IP address', r.ip], ['Emailed to staff', r.emailedAt ? fmtStamp(r.emailedAt) : 'Not sent'], ['Last updated', r.updatedAt ? fmtStamp(r.updatedAt) : '']];
+        const facts = list => `<dl class="report-meta">${list.map(([k, v]) => `<div><dt>${k}</dt><dd>${v != null && v !== '' ? escape(v) : '—'}</dd></div>`).join('')}</dl>`;
+        const machine = machineFacts(r.machine);
+        return `<tr class="report-detail"><td colspan="6"><div class="report-detail-body"><div><span class="eyebrow">${escape(reportType(r).toUpperCase())}</span><p class="report-full">${escape(r.description) || '<span class="muted">No description provided.</span>'}</p></div>${facts(meta)}${machine.length ? `<div><span class="eyebrow">MACHINE WHEN REPORTED</span>${facts(machine)}</div>` : ''}<div class="report-actions">${actions.map(([next, label, kind]) => `<button type="button" class="button ${kind}" data-rep-status="${next}" data-id="${escape(r.id)}">${label}</button>`).join('')}</div></div></td></tr>`;
     }
     function reportRows(all, items) {
         const d = reports.get();
         if (!items.length) {
-            const text = all.length ? 'No matching reports.' : d.connected === null ? 'Loading reports…' : d.connected ? 'No reports yet. Reports sent from the portal will appear here.' : 'No reports yet. Once the portal is connected, reports users send will appear here.';
+            const text = all.length ? 'No matching reports.' : d.connected === null ? 'Loading reports…' : d.connected ? 'No reports yet. Reports sent from the portal will appear here.' : 'No reports yet. /api/reports is not reachable from this dashboard.';
             return `<tr><td colspan="6" class="empty-state">${text}</td></tr>`;
         }
         return items.map(r => {
-            const [catLabel, catIcon] = reports.category(r.category), [stLabel, stColor] = reports.status(r.status);
+            const type = reportType(r), [stLabel, stColor] = reports.status(r.status);
             const open = String(r.id) === String(repOpen);
-            return `<tr class="report-row${open ? ' open' : ''}${(r.status || 'new') === 'new' ? ' unread' : ''}"><td>${fmtStamp(r.createdAt)}</td><td><span class="report-category"><i data-lucide="${catIcon}"></i>${catLabel}</span></td><td><span class="report-message">${escape(r.message) || '<span class="muted">No message</span>'}</span></td><td>${reporter(r)}</td><td>${badge(stLabel, stColor)}</td><td><button type="button" class="text-button" data-rep-open="${escape(r.id)}" aria-expanded="${open}">${open ? 'Close' : 'View'}</button></td></tr>${open ? reportDetail(r) : ''}`;
+            return `<tr class="report-row${open ? ' open' : ''}${(r.status || 'new') === 'new' ? ' unread' : ''}"><td>${fmtStamp(r.createdAt)}</td><td><span class="report-category"><i data-lucide="${reports.typeIcon(type)}"></i>${escape(r.type || type)}</span></td><td><span class="report-message">${escape(r.description) || '<span class="muted">No description</span>'}</span></td><td>${reporter(r)}</td><td>${badge(stLabel, stColor)}</td><td><button type="button" class="text-button" data-rep-open="${escape(r.id)}" aria-expanded="${open}">${open ? 'Close' : 'View'}</button></td></tr>${open ? reportDetail(r) : ''}`;
         }).join('');
     }
     function renderReportsLive() {
@@ -299,12 +310,12 @@
         const d = reports.get(), all = d.reports, count = st => all.filter(r => (r.status || 'new') === st).length;
         const day = Date.now() - 864e5, unreadCount = count('new');
         $('rep-metrics').innerHTML = metric('Reports received', all.length, `${all.filter(r => r.createdAt >= day).length} in the last 24 hours`) + metric('New', unreadCount, 'Waiting for review') + metric('In progress', count('in_progress'), 'Being looked into') + metric('Resolved', count('resolved'), 'Closed out');
-        $('rep-badge').innerHTML = d.connected === false ? badge('Portal not connected', 'amber') : badge(unreadCount ? `${unreadCount} new` : 'All caught up', unreadCount ? 'red' : 'green');
+        $('rep-badge').innerHTML = d.connected === false ? badge('API not reachable', 'amber') : badge(unreadCount ? `${unreadCount} new` : 'All caught up', unreadCount ? 'red' : 'green');
         const pg = paginate(all.filter(reportMatches), repPage, repPageSize);
         repPage = pg.page;
         $('rep-rows').innerHTML = reportRows(all, pg.items);
         $('rep-pager').innerHTML = pager('rep', pg, repPageSize, 'reports');
-        $('rep-note').textContent = d.connected ? 'Reports refresh automatically every few seconds.' : d.connected === false ? 'Waiting for the portal integration: /api/reports is not available yet, so status changes are kept in this browser tab only.' : '';
+        $('rep-note').textContent = d.connected === false ? 'The reports API is not reachable, so status changes are kept in this browser tab only.' : d.storage === 'ephemeral' ? 'Reports are temporary: DATABASE_URL is not set, so they reset when the server restarts.' : d.connected ? 'Reports refresh automatically every few seconds. The station relays each report once it has internet.' : '';
         if (window.lucide) window.lucide.createIcons();
     }
     async function changeReportStatus(id, next) {
@@ -330,7 +341,7 @@
         else { repPageSize = Number(sel.value); repPage = 1; renderReportsLive(); }
     });
     function exportReports() {
-        const csv = [['Report ID', 'Received', 'Category', 'Status', 'Message', 'Contact', 'Device MAC', 'IP address', 'Session'], ...reports.get().reports.map(r => [r.id, new Date(r.createdAt).toISOString(), reports.category(r.category)[0], reports.status(r.status)[0], r.message || '', r.contact || '', r.deviceMac || '', r.ip || '', r.sessionId || ''])].map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+        const csv = [['Report ID', 'Received', 'Problem type', 'Status', 'Description', 'Station', 'Device MAC', 'IP address', 'Last bottle', 'Last result', 'Last weight (g)', 'Bin level'], ...reports.get().reports.map(r => { const m = r.machine || {}; return [r.id, new Date(r.createdAt).toISOString(), r.type, reports.status(r.status)[0], r.description || '', r.stationId || '', r.deviceMac || '', r.ip || '', m.lastBottle || '', m.lastResult || '', m.lastWeightG == null ? '' : m.lastWeightG, m.trashLevel || '']; })].map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })), a = document.createElement('a'); a.href = url; a.download = 'bottlenet-portal-reports.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); toast('Reports export downloaded.');
     }
     function exportSecurity() {
